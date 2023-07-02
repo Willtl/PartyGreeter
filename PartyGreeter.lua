@@ -1,8 +1,10 @@
 -- Persistent variables
 greetings = greetings or { "Hi", "Hello", "Sup" }
+groupTerms = groupTerms or { "guys", "folks", "everyone", "all" }
 delay = delay or 4
 includeRealm = includeRealm or false
 includePlayerName = includePlayerName or true
+useInRaid = useInRaid or false
 
 -- Local variables
 local greetingTimer = nil
@@ -17,13 +19,23 @@ local function sendRandomGreeting()
         -- Select a random greeting
         local message = greetings[math.random(#greetings)]
 
-        -- Append the player names if option is set
-        if includePlayerName then
-            message = message .. " " .. table.concat(newMembers, ", ")
+        -- Append the player names if option is set (add names only if you are the leader of the party)
+        if includePlayerName and UnitIsGroupLeader("player") then
+            if #newMembers == 1 then
+                message = message .. " " .. newMembers[1]
+            else
+                message = message .. " " .. groupTerms[math.random(#groupTerms)]
+            end
+        end
+
+        -- Check whether we're in a party or raid, and whether we should send the message in raid chat
+        local chatType = "PARTY"
+        if IsInRaid() and useInRaid then
+            chatType = "RAID"
         end
 
         -- Send the greeting
-        SendChatMessage(message, "PARTY")
+        SendChatMessage(message, chatType)
 
         -- Clear the list of new members
         newMembers = {}
@@ -97,11 +109,14 @@ SlashCmdList["PARTYGREETER"] = function(msg)
     -- Help command
     if command == "help" then
         print("Party Greeter commands:")
-        print("/partygreeter : Shows current settings.")
-        print("/partygreeter delay <seconds> : Set the delay before greeting new party members.")
-        print("/partygreeter realm <true/false> : Set whether to include the realm in greetings.")
-        print("/partygreeter playername <true/false> : Set whether to include the player name in greetings.")
-        print("/partygreeter greetings <greeting1,greeting2,...> : Set custom greetings separated by commas.")
+        print("/partygreeter: Shows current settings.")
+        print("/partygreeter delay <seconds>: Set the delay before greeting new party members.")
+        print("/partygreeter realm <true/false>: Set whether to include the realm in greetings.")
+        print("/partygreeter playername <true/false>: Set whether to include the player name in greetings.")
+        print("/partygreeter useinraid <true/false>: Set whether to use the greeter in raid groups.")
+        print("/partygreeter greetings <greeting1,greeting2,...>: Set custom greetings separated by commas.")
+        print("/partygreeter groupterms <term1,term2,...>: Set custom group terms separated by commas.")
+        print("/partygreeter reset: Reset all settings to default values.")
         return
     end
 
@@ -112,6 +127,7 @@ SlashCmdList["PARTYGREETER"] = function(msg)
         print("Delay: " .. delay)
         print("Include player name in greeting: " .. tostring(includePlayerName))
         print("Include realm in greeting: " .. tostring(includeRealm))
+        print("Use greeter in raid groups: " .. tostring(useInRaid))
         -- Change delay
     elseif command == "delay" then
         local newDelay = tonumber(value)
@@ -143,9 +159,20 @@ SlashCmdList["PARTYGREETER"] = function(msg)
         else
             print("Invalid playername value. Please provide either 'true' or 'false'.")
         end
+        -- Change raid inclusion
+    elseif command == "useinraid" then
+        if value == "true" then
+            useInRaid = true
+            print("Use greeter in raid groups: ON")
+        elseif value == "false" then
+            useInRaid = false
+            print("Use greeter in raid groups: OFF")
+        else
+            print("Invalid raid value. Please provide either 'true' or 'false'.")
+        end
         -- Change greetings
-    else
-        greetings = { strsplit(",", msg) }
+    elseif command == "greetings" then
+        greetings = { strsplit(",", value) }
 
         for i, v in ipairs(greetings) do
             greetings[i] = strtrim(v)
@@ -155,5 +182,32 @@ SlashCmdList["PARTYGREETER"] = function(msg)
         for _, v in ipairs(greetings) do
             print(v)
         end
+        -- Reset all variables to their initial values
+    elseif command == "groupterms" then
+        groupTerms = { strsplit(",", value) }
+
+        for i, v in ipairs(groupTerms) do
+            groupTerms[i] = strtrim(v)
+        end
+
+        print("New group terms set:")
+        for _, v in ipairs(groupTerms) do
+            print(v)
+        end
+    elseif command == "reset" then
+        greetings = { "Hi", "Hello", "Sup" }
+        delay = 4
+        includeRealm = false
+        includePlayerName = true
+        useInRaid = false
+
+        print("All settings have been reset to default values.")
+        print("Greetings: " .. table.concat(greetings, ", "))
+        print("Delay: " .. delay)
+        print("Include player name in greeting: " .. tostring(includePlayerName))
+        print("Include realm in greeting: " .. tostring(includeRealm))
+        print("Use greeter in raid groups: " .. tostring(useInRaid))
+    else
+        print("Invalid command. Type '/partygreeter help' for a list of commands.")
     end
 end

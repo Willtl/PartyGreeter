@@ -5,7 +5,9 @@
 ## Author: Willian T. Lunardi
 ## IconTexture: Interface\Icons\spell_nature_polymorph_cow
 ## SavedVariables: greetings
+## SavedVariables: groupTerms
 ## SavedVariables: delay
 ## SavedVariables: includeRealm
 ## SavedVariables: includePlayerName
+## SavedVariables: useInRaid
 PartyGreeter.lua
