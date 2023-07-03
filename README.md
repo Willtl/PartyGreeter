@@ -1,6 +1,6 @@
 # WoW Party Greeter Addon
 
-This repository contains the code for a World of Warcraft addon that automatically greets new members when they join your party.
+A World of Warcraft addon for automatically greeting new party members with customizable messages, delays, and other settings.
 
 ## Features
 
