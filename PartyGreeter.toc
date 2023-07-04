@@ -1,7 +1,7 @@
 ## Interface: 100100
 ## Title: Party Greeter
 ## Notes: A simple addon to greet new party members.
-## Version: 1.0.0
+## Version: 1.0.1
 ## Author: Willian T. Lunardi
 ## IconTexture: Interface\Icons\spell_nature_polymorph_cow
 ## SavedVariables: greetings

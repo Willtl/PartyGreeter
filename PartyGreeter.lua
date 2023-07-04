@@ -19,23 +19,19 @@ local function sendRandomGreeting()
         -- Select a random greeting
         local message = greetings[math.random(#greetings)]
 
-        -- Append the player names if option is set (add names only if you are the leader of the party)
-        if includePlayerName and UnitIsGroupLeader("player") then
-            if #newMembers == 1 then
-                message = message .. " " .. newMembers[1]
-            else
-                message = message .. " " .. groupTerms[math.random(#groupTerms)]
-            end
+        -- Append the player names if option is set
+        if includePlayerName and #newMembers == 1 then
+            message = message .. " " .. newMembers[1]
+        elseif #newMembers > 1 then
+            message = message .. " " .. groupTerms[math.random(#groupTerms)]
         end
 
         -- Check whether we're in a party or raid, and whether we should send the message in raid chat
-        local chatType = "PARTY"
         if IsInRaid() and useInRaid then
-            chatType = "RAID"
+            SendChatMessage(message, "RAID")
+        else
+            SendChatMessage(message, "PARTY")
         end
-
-        -- Send the greeting
-        SendChatMessage(message, chatType)
 
         -- Clear the list of new members
         newMembers = {}
