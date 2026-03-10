@@ -45,8 +45,9 @@ local TEXT = {
     greetingsLabel = "Greetings",
     addGreetingOption = "Add custom greeting...",
     addGreetingPopupTitle = "Add Custom Greeting",
-    groupTermsLabel = "Group Terms List",
-    editListOption = "Edit custom list...",
+    groupTermsLabel = "Group Terms",
+    addGroupTermOption = "Add custom group term...",
+    addGroupTermPopupTitle = "Add Custom Group Term",
 }
 
 local LIMITS = {
@@ -54,10 +55,6 @@ local LIMITS = {
     fixedDelayMax = 15,
     randomBoundsMin = 0,
     randomBoundsMax = 120,
-}
-
-local SENTINELS = {
-    editList = "__EDIT_LIST__",
 }
 
 local LIST_EDITOR_POPUP_KEY = "PARTYGREETER_EDIT_LIST"
@@ -105,19 +102,6 @@ local function normalizeBounds(lower, upper)
     return normalizedLower, normalizedUpper
 end
 
-local function applyListSetting(dbKey, rawText, fallback)
-    local parsed = addon.ParseCommaSeparatedList(rawText)
-    if parsed then
-        PartyGreeterDB[dbKey] = parsed
-    else
-        PartyGreeterDB[dbKey] = addon.CloneList(fallback)
-    end
-end
-
-local function listToDisplay(list)
-    return addon.ListToDisplayText(list)
-end
-
 local function listContains(list, value)
     if type(list) ~= "table" then
         return false
@@ -142,7 +126,7 @@ local function appendUnique(list, value)
     end
 end
 
-local function buildGreetingOptionsPool()
+local function buildOptionsPool(presets, defaultsList, currentList)
     local pool = {}
     local function addAll(source)
         if type(source) ~= "table" then
@@ -157,19 +141,11 @@ local function buildGreetingOptionsPool()
         end
     end
 
-    addAll(GREETING_PRESETS)
-    addAll(addon.DEFAULTS.greetings)
-    addAll(PartyGreeterDB.greetings)
+    addAll(presets)
+    addAll(defaultsList)
+    addAll(currentList)
 
     return pool
-end
-
-local function trimDisplay(text)
-    if #text <= 54 then
-        return text
-    end
-
-    return string.sub(text, 1, 51) .. "..."
 end
 
 local function ensureListEditorPopup()
@@ -309,61 +285,23 @@ local function createSliderSetting(category, key, label, defaultValue, getter, s
     return setting, initializer
 end
 
-local function createEditableListSetting(category, key, label, dbKey, defaultsList)
-    local defaultString = listToDisplay(defaultsList)
-
-    local function getValue()
-        return listToDisplay(PartyGreeterDB[dbKey])
-    end
-
-    local function setValue(value)
-        if value == SENTINELS.editList then
-            local currentText = listToDisplay(PartyGreeterDB[dbKey])
-            showListEditorPopup(label, currentText, function(text)
-                applyListSetting(dbKey, text, defaultsList)
-            end)
-            return
-        end
-
-        applyListSetting(dbKey, value, defaultsList)
-    end
-
-    local setting = Settings.RegisterProxySetting(
-        category,
-        key,
-        Settings.VarType.String,
-        label,
-        defaultString,
-        getValue,
-        setValue
-    )
-
-    local function getOptions()
-        local container = Settings.CreateControlTextContainer()
-        local currentString = listToDisplay(PartyGreeterDB[dbKey])
-        local defaultsString = listToDisplay(defaultsList)
-
-        container:Add(currentString, "Current: " .. trimDisplay(currentString))
-        if defaultsString ~= currentString then
-            container:Add(defaultsString, "Default: " .. trimDisplay(defaultsString))
-        end
-        container:Add(SENTINELS.editList, TEXT.editListOption)
-
-        return container:GetData()
-    end
-
-    local initializer = Settings.CreateDropdown(category, setting, getOptions, nil)
-
-    return setting, initializer
-end
-
-local function createGreetingsMultiSelectSetting(category, key, label)
+local function createListMultiSelectSetting(
+    category,
+    key,
+    label,
+    dbKey,
+    defaultsList,
+    presets,
+    addOptionLabel,
+    addPopupTitle
+)
     local function getOptionEntries()
         local entries = {}
-        for index, greeting in ipairs(buildGreetingOptionsPool()) do
+        local source = buildOptionsPool(presets, defaultsList, PartyGreeterDB[dbKey])
+        for index, value in ipairs(source) do
             entries[index] = {
                 id = index,
-                label = greeting,
+                label = value,
             }
         end
         return entries
@@ -372,8 +310,8 @@ local function createGreetingsMultiSelectSetting(category, key, label)
     local function getMaskFromList(list, entries)
         local selected = {}
         if type(list) == "table" then
-            for _, greeting in ipairs(list) do
-                selected[greeting] = true
+            for _, value in ipairs(list) do
+                selected[value] = true
             end
         end
 
@@ -398,11 +336,11 @@ local function createGreetingsMultiSelectSetting(category, key, label)
         return selected
     end
 
-    local defaultMask = getMaskFromList(addon.DEFAULTS.greetings, getOptionEntries())
+    local defaultMask = getMaskFromList(defaultsList, getOptionEntries())
 
     local function getValue()
-        local source = type(PartyGreeterDB.greetings) == "table" and PartyGreeterDB.greetings
-            or addon.DEFAULTS.greetings
+        local source = type(PartyGreeterDB[dbKey]) == "table" and PartyGreeterDB[dbKey]
+            or defaultsList
         return getMaskFromList(source, getOptionEntries())
     end
 
@@ -419,23 +357,23 @@ local function createGreetingsMultiSelectSetting(category, key, label)
 
         local selected = getListFromMask(sanitizedMask, entries)
         if #selected == 0 then
-            selected = addon.CloneList(addon.DEFAULTS.greetings)
+            selected = addon.CloneList(defaultsList)
         end
-        PartyGreeterDB.greetings = selected
+        PartyGreeterDB[dbKey] = selected
 
         if not addRequested then
             return
         end
 
-        showListEditorPopup(TEXT.addGreetingPopupTitle, "", function(text)
+        showListEditorPopup(addPopupTitle, "", function(text)
             local trimmed = addon.TrimWhitespace(text)
             if trimmed == "" then
                 return
             end
 
-            local updated = addon.CloneList(PartyGreeterDB.greetings)
+            local updated = addon.CloneList(PartyGreeterDB[dbKey])
             appendUnique(updated, trimmed)
-            PartyGreeterDB.greetings = updated
+            PartyGreeterDB[dbKey] = updated
         end)
     end
 
@@ -456,13 +394,39 @@ local function createGreetingsMultiSelectSetting(category, key, label)
         for _, entry in ipairs(entries) do
             container:AddCheckbox(entry.id, entry.label, nil)
         end
-        container:AddCheckbox(#entries + 1, TEXT.addGreetingOption, nil)
+        container:AddCheckbox(#entries + 1, addOptionLabel, nil)
 
         return container:GetData()
     end
 
     local initializer = Settings.CreateDropdown(category, setting, getOptions, nil)
     return setting, initializer
+end
+
+local function createGreetingsMultiSelectSetting(category, key, label)
+    return createListMultiSelectSetting(
+        category,
+        key,
+        label,
+        "greetings",
+        addon.DEFAULTS.greetings,
+        GREETING_PRESETS,
+        TEXT.addGreetingOption,
+        TEXT.addGreetingPopupTitle
+    )
+end
+
+local function createGroupTermsMultiSelectSetting(category, key, label)
+    return createListMultiSelectSetting(
+        category,
+        key,
+        label,
+        "groupTerms",
+        addon.DEFAULTS.groupTerms,
+        nil,
+        TEXT.addGroupTermOption,
+        TEXT.addGroupTermPopupTitle
+    )
 end
 
 function addon.RegisterSettingsPanel()
@@ -600,12 +564,10 @@ function addon.RegisterSettingsPanel()
         addon.Settings.Keys.Greetings,
         TEXT.greetingsLabel
     )
-    createEditableListSetting(
+    createGroupTermsMultiSelectSetting(
         category,
         addon.Settings.Keys.GroupTerms,
-        TEXT.groupTermsLabel,
-        "groupTerms",
-        addon.DEFAULTS.groupTerms
+        TEXT.groupTermsLabel
     )
 
     Settings.RegisterAddOnCategory(category)
