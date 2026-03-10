@@ -14,10 +14,9 @@ Start conversations quickly without typing every message by hand.
 
 ## Installation
 
-### CurseForge / Wago
+### CurseForge
 
-- CurseForge: Not published yet.
-- Wago: Not published yet.
+- CurseForge: <https://www.curseforge.com/wow/addons/partygreeter>
 
 ### Manual GitHub Installation
 
