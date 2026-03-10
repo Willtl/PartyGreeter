@@ -1,13 +1,10 @@
-## Interface: 100100
+## Interface: 120001
 ## Title: Party Greeter
 ## Notes: A simple addon to greet new party members.
-## Version: 1.0.1
+## Version: 1.1.0
 ## Author: Willian T. Lunardi
-## IconTexture: Interface\Icons\spell_nature_polymorph_cow
-## SavedVariables: greetings
-## SavedVariables: groupTerms
-## SavedVariables: delay
-## SavedVariables: includeRealm
-## SavedVariables: includePlayerName
-## SavedVariables: useInRaid
-PartyGreeter.lua
+## IconTexture: Interface\AddOns\PartyGreeter\Media\icon_256.png
+## SavedVariables: PartyGreeterDB
+Init.lua
+Settings.lua
+Core.lua
