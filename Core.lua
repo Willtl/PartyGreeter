@@ -85,12 +85,31 @@ local function clearPendingGreeting()
 end
 
 local function getGreetingDelay()
-    local value = tonumber(PartyGreeterDB.delay) or addon.DEFAULTS.delay
-    if value < 0 then
-        return 0
+    local fixedDelay = tonumber(PartyGreeterDB.delay) or addon.DEFAULTS.delay
+    if fixedDelay < 0 then
+        fixedDelay = 0
     end
 
-    return value
+    if PartyGreeterDB.randomDelayEnabled then
+        local lowerBound = tonumber(PartyGreeterDB.delayLowerBound) or addon.DEFAULTS.delayLowerBound
+        local upperBound = tonumber(PartyGreeterDB.delayUpperBound) or addon.DEFAULTS.delayUpperBound
+
+        lowerBound = math.floor(lowerBound + 0.5)
+        upperBound = math.floor(upperBound + 0.5)
+        if lowerBound < 0 then
+            lowerBound = 0
+        end
+        if upperBound < 0 then
+            upperBound = 0
+        end
+        if lowerBound > upperBound then
+            lowerBound, upperBound = upperBound, lowerBound
+        end
+
+        return math.random(lowerBound, upperBound)
+    end
+
+    return fixedDelay
 end
 
 local function sendRandomGreeting()

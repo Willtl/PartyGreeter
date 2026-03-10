@@ -5,6 +5,9 @@ addon.DEFAULTS = {
     greetings = { "Hi", "Hello", "Sup" },
     groupTerms = { "guys", "folks", "everyone", "all" },
     delay = 4,
+    randomDelayEnabled = false,
+    delayLowerBound = 2,
+    delayUpperBound = 6,
     includeRealm = false,
     includePlayerName = true,
     useInRaid = false,
@@ -107,6 +110,34 @@ function addon.NormalizeDatabase()
     if type(PartyGreeterDB.useInRaid) ~= "boolean" then
         PartyGreeterDB.useInRaid = addon.DEFAULTS.useInRaid
     end
+
+    if type(PartyGreeterDB.randomDelayEnabled) ~= "boolean" then
+        PartyGreeterDB.randomDelayEnabled = addon.DEFAULTS.randomDelayEnabled
+    end
+
+    local lowerBound = tonumber(PartyGreeterDB.delayLowerBound)
+    if not lowerBound then
+        lowerBound = addon.DEFAULTS.delayLowerBound
+    end
+    local upperBound = tonumber(PartyGreeterDB.delayUpperBound)
+    if not upperBound then
+        upperBound = addon.DEFAULTS.delayUpperBound
+    end
+
+    lowerBound = math.floor(lowerBound + 0.5)
+    upperBound = math.floor(upperBound + 0.5)
+    if lowerBound < 0 then
+        lowerBound = 0
+    end
+    if upperBound < 0 then
+        upperBound = 0
+    end
+    if lowerBound > upperBound then
+        lowerBound, upperBound = upperBound, lowerBound
+    end
+
+    PartyGreeterDB.delayLowerBound = lowerBound
+    PartyGreeterDB.delayUpperBound = upperBound
 end
 
 addon.optionsCategory = nil

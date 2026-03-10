@@ -18,6 +18,25 @@ local function getDelayForUI()
     return value
 end
 
+local function getBoundsForUI()
+    local lowerBound = tonumber(PartyGreeterDB.delayLowerBound) or addon.DEFAULTS.delayLowerBound
+    local upperBound = tonumber(PartyGreeterDB.delayUpperBound) or addon.DEFAULTS.delayUpperBound
+
+    lowerBound = math.floor(lowerBound + 0.5)
+    upperBound = math.floor(upperBound + 0.5)
+    if lowerBound < 0 then
+        lowerBound = 0
+    end
+    if upperBound < 0 then
+        upperBound = 0
+    end
+    if lowerBound > upperBound then
+        lowerBound, upperBound = upperBound, lowerBound
+    end
+
+    return lowerBound, upperBound
+end
+
 function addon.RegisterSettingsPanel()
     if addon.optionsCategory or not Settings or not Settings.RegisterCanvasLayoutCategory then
         return
@@ -52,8 +71,14 @@ function addon.RegisterSettingsPanel()
     useInRaidLabel:SetPoint("LEFT", useInRaidCheckbox, "RIGHT", 4, 1)
     useInRaidLabel:SetText("Send greetings in raid groups")
 
+    local randomDelayCheckbox = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    randomDelayCheckbox:SetPoint("TOPLEFT", useInRaidCheckbox, "BOTTOMLEFT", 0, -22)
+    local randomDelayLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    randomDelayLabel:SetPoint("LEFT", randomDelayCheckbox, "RIGHT", 4, 1)
+    randomDelayLabel:SetText("Use random delay interval")
+
     local delayLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    delayLabel:SetPoint("TOPLEFT", useInRaidCheckbox, "BOTTOMLEFT", 0, -22)
+    delayLabel:SetPoint("TOPLEFT", randomDelayCheckbox, "BOTTOMLEFT", 0, -12)
     delayLabel:SetText("Delay before greeting (seconds)")
 
     local delaySlider = CreateFrame("Slider", nil, panel, "OptionsSliderTemplate")
@@ -65,6 +90,26 @@ function addon.RegisterSettingsPanel()
 
     local delayValueLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
     delayValueLabel:SetPoint("LEFT", delaySlider, "RIGHT", 14, 0)
+
+    local lowerBoundLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    lowerBoundLabel:SetPoint("TOPLEFT", randomDelayCheckbox, "BOTTOMLEFT", 0, -12)
+    lowerBoundLabel:SetText("Lower bound (seconds)")
+
+    local lowerBoundInput = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    lowerBoundInput:SetPoint("TOPLEFT", lowerBoundLabel, "BOTTOMLEFT", 0, -6)
+    lowerBoundInput:SetSize(90, 24)
+    lowerBoundInput:SetAutoFocus(false)
+    lowerBoundInput:SetNumeric(true)
+
+    local upperBoundLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    upperBoundLabel:SetPoint("LEFT", lowerBoundInput, "RIGHT", 24, 0)
+    upperBoundLabel:SetText("Upper bound (seconds)")
+
+    local upperBoundInput = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+    upperBoundInput:SetPoint("LEFT", upperBoundLabel, "RIGHT", 10, 0)
+    upperBoundInput:SetSize(90, 24)
+    upperBoundInput:SetAutoFocus(false)
+    upperBoundInput:SetNumeric(true)
 
     local greetingsLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     greetingsLabel:SetPoint("TOPLEFT", delaySlider, "BOTTOMLEFT", 0, -24)
@@ -84,7 +129,81 @@ function addon.RegisterSettingsPanel()
     groupTermsInput:SetSize(430, 24)
     groupTermsInput:SetAutoFocus(false)
 
+    local helpLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    helpLabel:SetPoint("TOPLEFT", groupTermsInput, "BOTTOMLEFT", 0, -18)
+    helpLabel:SetWidth(560)
+    helpLabel:SetJustifyH("LEFT")
+
+    local defaultHelpText = "Hover over an option to see what it does."
+    helpLabel:SetText(defaultHelpText)
+
     local isRefreshing = false
+
+    local function bindHoverHelp(widget, helpText)
+        widget:SetScript("OnEnter", function()
+            helpLabel:SetText(helpText)
+        end)
+        widget:SetScript("OnLeave", function()
+            helpLabel:SetText(defaultHelpText)
+        end)
+    end
+
+    local function applyDelayBoundsFromInputs()
+        local lowerText = addon.TrimWhitespace(lowerBoundInput:GetText())
+        local upperText = addon.TrimWhitespace(upperBoundInput:GetText())
+
+        local lowerBound = tonumber(lowerText)
+        local upperBound = tonumber(upperText)
+        if not lowerBound then
+            lowerBound = addon.DEFAULTS.delayLowerBound
+        end
+        if not upperBound then
+            upperBound = addon.DEFAULTS.delayUpperBound
+        end
+
+        lowerBound = math.floor(lowerBound + 0.5)
+        upperBound = math.floor(upperBound + 0.5)
+        if lowerBound < 0 then
+            lowerBound = 0
+        end
+        if upperBound < 0 then
+            upperBound = 0
+        end
+        if lowerBound > upperBound then
+            lowerBound, upperBound = upperBound, lowerBound
+        end
+
+        PartyGreeterDB.delayLowerBound = lowerBound
+        PartyGreeterDB.delayUpperBound = upperBound
+    end
+
+    local function applyDelayModeVisibility(randomEnabled)
+        if randomEnabled then
+            delayLabel:Hide()
+            delaySlider:Hide()
+            delayValueLabel:Hide()
+
+            lowerBoundLabel:Show()
+            lowerBoundInput:Show()
+            upperBoundLabel:Show()
+            upperBoundInput:Show()
+
+            greetingsLabel:ClearAllPoints()
+            greetingsLabel:SetPoint("TOPLEFT", lowerBoundInput, "BOTTOMLEFT", 0, -20)
+        else
+            delayLabel:Show()
+            delaySlider:Show()
+            delayValueLabel:Show()
+
+            lowerBoundLabel:Hide()
+            lowerBoundInput:Hide()
+            upperBoundLabel:Hide()
+            upperBoundInput:Hide()
+
+            greetingsLabel:ClearAllPoints()
+            greetingsLabel:SetPoint("TOPLEFT", delaySlider, "BOTTOMLEFT", 0, -24)
+        end
+    end
 
     local function refreshControls()
         isRefreshing = true
@@ -92,10 +211,17 @@ function addon.RegisterSettingsPanel()
         includePlayerNameCheckbox:SetChecked(PartyGreeterDB.includePlayerName)
         includeRealmCheckbox:SetChecked(PartyGreeterDB.includeRealm)
         useInRaidCheckbox:SetChecked(PartyGreeterDB.useInRaid)
+        local randomDelayEnabled = PartyGreeterDB.randomDelayEnabled and true or false
+        randomDelayCheckbox:SetChecked(randomDelayEnabled)
+        applyDelayModeVisibility(randomDelayEnabled)
 
         local delayValue = math.floor(getDelayForUI() + 0.5)
         delaySlider:SetValue(delayValue)
         delayValueLabel:SetText(tostring(delayValue))
+
+        local lowerBound, upperBound = getBoundsForUI()
+        lowerBoundInput:SetText(tostring(lowerBound))
+        upperBoundInput:SetText(tostring(upperBound))
 
         greetingsInput:SetText(addon.ListToDisplayText(PartyGreeterDB.greetings))
         groupTermsInput:SetText(addon.ListToDisplayText(PartyGreeterDB.groupTerms))
@@ -131,6 +257,31 @@ function addon.RegisterSettingsPanel()
         delayValueLabel:SetText(tostring(rounded))
     end)
 
+    randomDelayCheckbox:SetScript("OnClick", function(self)
+        PartyGreeterDB.randomDelayEnabled = self:GetChecked() and true or false
+        applyDelayModeVisibility(PartyGreeterDB.randomDelayEnabled)
+    end)
+
+    lowerBoundInput:SetScript("OnEnterPressed", function(self)
+        applyDelayBoundsFromInputs()
+        self:ClearFocus()
+        refreshControls()
+    end)
+    lowerBoundInput:SetScript("OnEditFocusLost", function()
+        applyDelayBoundsFromInputs()
+        refreshControls()
+    end)
+
+    upperBoundInput:SetScript("OnEnterPressed", function(self)
+        applyDelayBoundsFromInputs()
+        self:ClearFocus()
+        refreshControls()
+    end)
+    upperBoundInput:SetScript("OnEditFocusLost", function()
+        applyDelayBoundsFromInputs()
+        refreshControls()
+    end)
+
     greetingsInput:SetScript("OnEnterPressed", function(self)
         applyListSetting("greetings", self:GetText(), addon.DEFAULTS.greetings)
         self:ClearFocus()
@@ -150,6 +301,16 @@ function addon.RegisterSettingsPanel()
         applyListSetting("groupTerms", self:GetText(), addon.DEFAULTS.groupTerms)
         refreshControls()
     end)
+
+    bindHoverHelp(includePlayerNameCheckbox, "When enabled, greetings include the player's name when only one new member joins.")
+    bindHoverHelp(includeRealmCheckbox, "When enabled, names include realm (for example Name-Realm). When disabled, only character names are used.")
+    bindHoverHelp(useInRaidCheckbox, "When enabled, greetings are sent in RAID chat. When disabled, no raid greeting is sent.")
+    bindHoverHelp(delaySlider, "Fixed delay in seconds before sending a greeting. Used when random interval is disabled.")
+    bindHoverHelp(randomDelayCheckbox, "Enable random delay mode. When enabled, each greeting uses a random delay between lower and upper bounds.")
+    bindHoverHelp(lowerBoundInput, "Minimum delay (seconds) for random interval mode.")
+    bindHoverHelp(upperBoundInput, "Maximum delay (seconds) for random interval mode.")
+    bindHoverHelp(greetingsInput, "Comma-separated list of greeting starters (for example: Hi, Hello, Sup).")
+    bindHoverHelp(groupTermsInput, "Comma-separated terms used when greeting multiple members (for example: guys, folks, everyone).")
 
     panel:SetScript("OnShow", refreshControls)
 
@@ -192,6 +353,7 @@ end
 addon.RegisterSettingsPanel()
 
 SLASH_PARTYGREETER1 = "/partygreeter"
+SLASH_PARTYGREETER2 = "/pg"
 SlashCmdList["PARTYGREETER"] = function()
     addon.OpenSettingsPanel()
 end
