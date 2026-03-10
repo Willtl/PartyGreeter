@@ -1,35 +1,48 @@
-# WoW Party Greeter Addon
+![Party Greeter Banner](assets/banner.jpg)
 
-A World of Warcraft addon for automatically greeting new party members with customizable messages, delays, and other settings.
+# Party Greeter
 
-## Features
+Party Greeter is a lightweight World of Warcraft addon that automatically welcomes new players when they join your party or raid.
+Start conversations quickly without typing every message by hand.
 
-- Customizable greetings
-- Ability to include the player's name and realm in the greeting
-- Configurable delay before the greeting is sent after a player joins the party
-- Greeting can be sent in a raid group as well
-- Personalized group terms when greeting multiple players
-- A set of slash commands for live customization of the addon's settings
+## Key Features
+
+- Automatically detects when players join your party or raid.
+- Configurable, randomized greetings and group terms.
+- Smart delays to avoid chat spam.
+- Clean native Blizzard settings UI (no third-party config UI libraries).
 
 ## Installation
 
-1. Download the repository.
-2. Extract the content into your `World of Warcraft\_retail_\Interface\AddOns` directory.
-3. Restart the game if it is currently running (or use `/reload ui`).
+### CurseForge / Wago
 
-## Usage
+- CurseForge: Not published yet.
+- Wago: Not published yet.
 
-Use the following slash commands to configure the addon:
+### Manual GitHub Installation
 
-- `/partygreeter`: Lists the current settings.
-- `/partygreeter delay <number>`: Sets the delay before the greeting is sent.
-- `/partygreeter realm <true/false>`: Specifies whether to include the player's realm in the greeting.
-- `/partygreeter playername <true/false>`: Specifies whether to include the player's name in the greeting.
-- `/partygreeter useinraid <true/false>`: Specifies whether to use the greeter in raid groups.
-- `/partygreeter greetings <greeting1,greeting2,...>`: Sets the list of possible greetings.
-- `/partygreeter groupterms <term1,term2,...>`: Sets the custom group terms for greeting.
-- `/partygreeter reset`: Resets all settings to their default values.
+1. Download the project ZIP: <https://github.com/Willtl/PartyGreeter/archive/refs/heads/main.zip>
+2. Extract the ZIP.
+3. Place the `PartyGreeter` folder directly in:
+   `World of Warcraft\_retail_\Interface\AddOns\`
+4. Confirm this file exists:
+   `World of Warcraft\_retail_\Interface\AddOns\PartyGreeter\PartyGreeter.toc`
+5. Start the game (or run `/reload` if already in-game).
 
-## Contributing
+## Usage & Configuration
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+1. Open the game menu with `ESC`.
+2. Go to `Options -> AddOns -> Party Greeter`.
+3. Configure greetings, group terms, and delay behavior.
+
+You can also open settings from the modern minimap Addon Compartment dropdown when the addon entry is available in your build/package.
+
+## Slash Commands
+
+- `/partygreeter` - Open settings.
+- `/pg` - Open settings.
+
+## Feedback & Bug Reports
+
+If something breaks or behaves unexpectedly, report it here:
+<https://github.com/Willtl/PartyGreeter/issues>

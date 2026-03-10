@@ -52,9 +52,9 @@ local TEXT = {
 
 local LIMITS = {
     fixedDelayMin = 0,
-    fixedDelayMax = 15,
+    fixedDelayMax = 20,
     randomBoundsMin = 0,
-    randomBoundsMax = 120,
+    randomBoundsMax = 20,
 }
 
 local LIST_EDITOR_POPUP_KEY = "PARTYGREETER_EDIT_LIST"
