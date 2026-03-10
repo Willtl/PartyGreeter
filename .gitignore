@@ -1,0 +1,14 @@
+# Repository-local guidance and generated reference payloads
+AGENTS.md
+docs/
+
+# Editor/IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
