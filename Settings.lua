@@ -607,6 +607,27 @@ function addon.OpenSettingsPanel()
     end
 end
 
+function PartyGreeter_OnCompartmentClick(addonName, buttonName)
+    addon.OpenSettingsPanel()
+end
+
+function PartyGreeter_OnCompartmentEnter(addonName, menuButtonFrame)
+    if not GameTooltip or not menuButtonFrame then
+        return
+    end
+
+    GameTooltip:SetOwner(menuButtonFrame, "ANCHOR_LEFT")
+    GameTooltip:SetText(TEXT.title)
+    GameTooltip:AddLine("Open settings", NORMAL_FONT_COLOR.r, NORMAL_FONT_COLOR.g, NORMAL_FONT_COLOR.b)
+    GameTooltip:Show()
+end
+
+function PartyGreeter_OnCompartmentLeave(addonName, menuButtonFrame)
+    if GameTooltip then
+        GameTooltip:Hide()
+    end
+end
+
 addon.RegisterSettingsPanel()
 
 SLASH_PARTYGREETER1 = "/partygreeter"

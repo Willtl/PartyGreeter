@@ -3,6 +3,9 @@
 ## Notes: A simple addon to greet new party members.
 ## Version: 1.1.0
 ## Author: Willian T. Lunardi
+## AddonCompartmentFunc: PartyGreeter_OnCompartmentClick
+## AddonCompartmentFuncOnEnter: PartyGreeter_OnCompartmentEnter
+## AddonCompartmentFuncOnLeave: PartyGreeter_OnCompartmentLeave
 ## IconTexture: Interface\AddOns\PartyGreeter\Media\icon_256.png
 ## SavedVariables: PartyGreeterDB
 Init.lua
