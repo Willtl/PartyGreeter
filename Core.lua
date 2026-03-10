@@ -4,6 +4,18 @@ local partySize = 0
 local greetedMembers = {}
 local newMembers = {}
 local greetingScheduleToken = 0
+local hasSessionBaseline = false
+local isBootstrapping = false
+local bootstrapStableToken = 0
+local bootstrapLastSignature = nil
+local BOOTSTRAP_STABLE_SECONDS = 1.5
+
+local function refreshGreetedMembers(currentMembers)
+    greetedMembers = {}
+    for guid in pairs(currentMembers) do
+        greetedMembers[guid] = true
+    end
+end
 
 local function stripRealmFromName(fullName)
     if not fullName then
@@ -84,6 +96,75 @@ local function clearPendingGreeting()
     greetingScheduleToken = greetingScheduleToken + 1
 end
 
+local function setBaselineFromSnapshot(currentPartySize, currentMembers)
+    refreshGreetedMembers(currentMembers)
+    partySize = currentPartySize
+    newMembers = {}
+    clearPendingGreeting()
+    hasSessionBaseline = true
+end
+
+local function buildRosterSignature(currentPartySize, currentMembers)
+    local guids = {}
+    for guid in pairs(currentMembers) do
+        table.insert(guids, guid)
+    end
+    table.sort(guids)
+
+    local groupType = "solo"
+    if isInRaidGroup() then
+        groupType = "raid"
+    elseif currentPartySize > 1 then
+        groupType = "party"
+    end
+
+    return groupType .. "|" .. tostring(currentPartySize) .. "|" .. table.concat(guids, ";")
+end
+
+local function startBootstrapStabilizationTimer(expectedSignature)
+    bootstrapStableToken = bootstrapStableToken + 1
+    local stableToken = bootstrapStableToken
+    C_Timer.After(BOOTSTRAP_STABLE_SECONDS, function()
+        if stableToken ~= bootstrapStableToken then
+            return
+        end
+
+        local latestPartySize, latestMembers = getCurrentGroupSnapshot()
+        local latestSignature = buildRosterSignature(latestPartySize, latestMembers)
+        if latestSignature ~= expectedSignature then
+            bootstrapLastSignature = latestSignature
+            setBaselineFromSnapshot(latestPartySize, latestMembers)
+            startBootstrapStabilizationTimer(latestSignature)
+            return
+        end
+
+        setBaselineFromSnapshot(latestPartySize, latestMembers)
+        bootstrapLastSignature = latestSignature
+        isBootstrapping = false
+    end)
+end
+
+local function processBootstrapSnapshot(currentPartySize, currentMembers)
+    local signature = buildRosterSignature(currentPartySize, currentMembers)
+    if signature == bootstrapLastSignature then
+        return
+    end
+
+    bootstrapLastSignature = signature
+    setBaselineFromSnapshot(currentPartySize, currentMembers)
+    startBootstrapStabilizationTimer(signature)
+end
+
+local function beginBootstrap()
+    bootstrapStableToken = bootstrapStableToken + 1
+    isBootstrapping = true
+    hasSessionBaseline = false
+    bootstrapLastSignature = nil
+
+    local currentPartySize, currentMembers = getCurrentGroupSnapshot()
+    processBootstrapSnapshot(currentPartySize, currentMembers)
+end
+
 local function getGreetingDelay()
     local fixedDelay = tonumber(PartyGreeterDB.delay) or addon.DEFAULTS.delay
     if fixedDelay < 0 then
@@ -159,11 +240,22 @@ end
 local function greetNewPartyMembers()
     local currentPartySize, currentMembers = getCurrentGroupSnapshot()
 
+    if isBootstrapping then
+        processBootstrapSnapshot(currentPartySize, currentMembers)
+        return
+    end
+
+    if not hasSessionBaseline then
+        setBaselineFromSnapshot(currentPartySize, currentMembers)
+        return
+    end
+
     if currentPartySize <= 1 then
         greetedMembers = {}
         newMembers = {}
         clearPendingGreeting()
-    elseif currentPartySize > partySize then
+    else
+        local hasAddedMembers = false
         for guid, fullName in pairs(currentMembers) do
             if not greetedMembers[guid] then
                 if PartyGreeterDB.includeRealm then
@@ -171,18 +263,33 @@ local function greetNewPartyMembers()
                 else
                     table.insert(newMembers, stripRealmFromName(fullName))
                 end
-                greetedMembers[guid] = true
+                hasAddedMembers = true
             end
         end
 
-        scheduleGreeting()
+        refreshGreetedMembers(currentMembers)
+
+        if hasAddedMembers then
+            scheduleGreeting()
+        end
     end
 
     partySize = currentPartySize
 end
 
 local eventFrame = CreateFrame("Frame")
+eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
-eventFrame:SetScript("OnEvent", function()
-    greetNewPartyMembers()
+eventFrame:SetScript("OnEvent", function(_, event, ...)
+    if event == "PLAYER_ENTERING_WORLD" then
+        local isInitialLogin, isReloadingUi = ...
+        if isInitialLogin or isReloadingUi then
+            beginBootstrap()
+        end
+        return
+    end
+
+    if event == "GROUP_ROSTER_UPDATE" then
+        greetNewPartyMembers()
+    end
 end)
