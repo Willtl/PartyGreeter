@@ -5,6 +5,17 @@ addon.Settings.Keys = {
     IncludePlayerName = "INCLUDE_PLAYER_NAME",
     IncludeRealm = "INCLUDE_REALM",
     UseInRaid = "USE_IN_RAID",
+    IgnoreListEnabled = "IGNORE_LIST_ENABLED",
+    PromptBeforeGreeting = "PROMPT_BEFORE_GREETING",
+    IgnoredPlayers = "IGNORED_PLAYERS",
+    AntiRepeatEnabled = "ANTI_REPEAT_ENABLED",
+    AntiRepeatCooldownMinutes = "ANTI_REPEAT_COOLDOWN_MINUTES",
+    AntiRepeatOncePerSession = "ANTI_REPEAT_ONCE_PER_SESSION",
+    QuietModeEnabled = "QUIET_MODE_ENABLED",
+    QuietModeSuppressInCombat = "QUIET_MODE_SUPPRESS_IN_COMBAT",
+    QuietModeSuppressDuringBossPulls = "QUIET_MODE_SUPPRESS_DURING_BOSS_PULLS",
+    QuietModeSuppressAfterKeyStart = "QUIET_MODE_SUPPRESS_AFTER_KEY_START",
+    QuietModeSuppressInMatchmadeGroups = "QUIET_MODE_SUPPRESS_IN_MATCHMADE_GROUPS",
     RandomDelayEnabled = "RANDOM_DELAY_ENABLED",
     Delay = "DELAY",
     DelayLowerBound = "DELAY_LOWER_BOUND",
@@ -13,29 +24,29 @@ addon.Settings.Keys = {
     GroupTerms = "GROUP_TERMS",
 }
 
-function addon.Settings.GetDisplayOrder()
-    return {
-        addon.Settings.Keys.IncludePlayerName,
-        addon.Settings.Keys.IncludeRealm,
-        addon.Settings.Keys.UseInRaid,
-        addon.Settings.Keys.RandomDelayEnabled,
-        addon.Settings.Keys.Delay,
-        addon.Settings.Keys.DelayLowerBound,
-        addon.Settings.Keys.DelayUpperBound,
-        addon.Settings.Keys.Greetings,
-        addon.Settings.Keys.GroupTerms,
-    }
-end
-
 local TEXT = {
     title = "Party Greeter",
     behaviorHeader = "Behavior",
+    ignoreListHeader = "Ignore List",
+    antiRepeatHeader = "Anti-Repeat",
+    quietModeHeader = "Quiet Mode",
     timingHeader = "Timing",
     messagesHeader = "Messages",
 
     includePlayerNameLabel = "Include player name when greeting one new member",
     includeRealmLabel = "Include realm in member names",
     useInRaidLabel = "Send greetings in raid groups",
+    ignoreListEnabledLabel = "Enable the ignore list",
+    promptBeforeGreetingLabel = "Show a greeting prompt when an ignored player joins",
+    ignoredPlayersLabel = "Ignored players",
+    antiRepeatEnabledLabel = "Avoid repeating greetings to the same player",
+    antiRepeatCooldownLabel = "Repeat cooldown (minutes)",
+    antiRepeatOncePerSessionLabel = "Only greet each player once per session",
+    quietModeEnabledLabel = "Suppress greetings during noisy or disruptive gameplay moments",
+    quietModeSuppressInCombatLabel = "Suppress greetings in combat",
+    quietModeSuppressDuringBossPullsLabel = "Suppress greetings during boss pulls",
+    quietModeSuppressAfterKeyStartLabel = "Suppress greetings after key start",
+    quietModeSuppressInMatchmadeGroupsLabel = "Suppress greetings in auto-formed matchmaking groups",
 
     randomDelayLabel = "Use random delay interval",
     delayLabel = "Fixed delay (seconds)",
@@ -48,6 +59,8 @@ local TEXT = {
     groupTermsLabel = "Group Terms",
     addGroupTermOption = "Add custom group term...",
     addGroupTermPopupTitle = "Add Custom Group Term",
+    addIgnoredPlayerOption = "Add ignored player...",
+    addIgnoredPlayerPopupTitle = "Add Ignored Player",
 }
 
 local LIMITS = {
@@ -55,10 +68,13 @@ local LIMITS = {
     fixedDelayMax = 20,
     randomBoundsMin = 0,
     randomBoundsMax = 20,
+    antiRepeatCooldownMin = 1,
+    antiRepeatCooldownMax = 1440,
 }
 
 local LIST_EDITOR_POPUP_KEY = "PARTYGREETER_EDIT_LIST"
 local GREETING_PRESETS = { "Hi", "Hello", "Hey", "Sup", "Yo", "Greetings" }
+local settingsPanelRegistered = false
 
 local function clamp(value, minValue, maxValue)
     if value < minValue then
@@ -100,6 +116,15 @@ local function normalizeBounds(lower, upper)
     end
 
     return normalizedLower, normalizedUpper
+end
+
+local function normalizeAntiRepeatCooldown(value)
+    local normalized = tonumber(value)
+    if not normalized then
+        normalized = addon.DEFAULTS.antiRepeatCooldownMinutes
+    end
+    normalized = math.floor(normalized + 0.5)
+    return clamp(normalized, LIMITS.antiRepeatCooldownMin, LIMITS.antiRepeatCooldownMax)
 end
 
 local function listContains(list, value)
@@ -293,8 +318,13 @@ local function createListMultiSelectSetting(
     defaultsList,
     presets,
     addOptionLabel,
-    addPopupTitle
+    addPopupTitle,
+    normalizeListFn
 )
+    local normalize = normalizeListFn or function(list)
+        return addon.CloneList(list)
+    end
+
     local function getOptionEntries()
         local entries = {}
         local source = buildOptionsPool(presets, defaultsList, PartyGreeterDB[dbKey])
@@ -359,7 +389,7 @@ local function createListMultiSelectSetting(
         if #selected == 0 then
             selected = addon.CloneList(defaultsList)
         end
-        PartyGreeterDB[dbKey] = selected
+        PartyGreeterDB[dbKey] = normalize(selected)
 
         if not addRequested then
             return
@@ -371,9 +401,9 @@ local function createListMultiSelectSetting(
                 return
             end
 
-            local updated = addon.CloneList(PartyGreeterDB[dbKey])
+            local updated = addon.CloneList(PartyGreeterDB[dbKey] or {})
             appendUnique(updated, trimmed)
-            PartyGreeterDB[dbKey] = updated
+            PartyGreeterDB[dbKey] = normalize(updated)
         end)
     end
 
@@ -412,7 +442,8 @@ local function createGreetingsMultiSelectSetting(category, key, label)
         addon.DEFAULTS.greetings,
         GREETING_PRESETS,
         TEXT.addGreetingOption,
-        TEXT.addGreetingPopupTitle
+        TEXT.addGreetingPopupTitle,
+        nil
     )
 end
 
@@ -425,17 +456,33 @@ local function createGroupTermsMultiSelectSetting(category, key, label)
         addon.DEFAULTS.groupTerms,
         nil,
         TEXT.addGroupTermOption,
-        TEXT.addGroupTermPopupTitle
+        TEXT.addGroupTermPopupTitle,
+        nil
+    )
+end
+
+local function createIgnoredPlayersMultiSelectSetting(category, key, label)
+    return createListMultiSelectSetting(
+        category,
+        key,
+        label,
+        "ignoredPlayers",
+        addon.DEFAULTS.ignoredPlayers,
+        nil,
+        TEXT.addIgnoredPlayerOption,
+        TEXT.addIgnoredPlayerPopupTitle,
+        addon.NormalizeNameList
     )
 end
 
 function addon.RegisterSettingsPanel()
-    if addon.optionsCategory or not Settings or not Settings.RegisterVerticalLayoutCategory then
+    if settingsPanelRegistered or not Settings or not Settings.RegisterVerticalLayoutCategory then
         return
     end
 
+    settingsPanelRegistered = true
+
     local category, layout = Settings.RegisterVerticalLayoutCategory(TEXT.title)
-    addon.optionsCategory = category
 
     tryAddSectionHeader(layout, TEXT.behaviorHeader)
 
@@ -477,6 +524,178 @@ function addon.RegisterSettingsPanel()
             PartyGreeterDB.useInRaid = value and true or false
         end
     )
+
+    tryAddSectionHeader(layout, TEXT.ignoreListHeader)
+
+    local _, ignoreListEnabledInitializer = createBooleanSetting(
+        category,
+        addon.Settings.Keys.IgnoreListEnabled,
+        TEXT.ignoreListEnabledLabel,
+        addon.DEFAULTS.ignoreListEnabled,
+        function()
+            return PartyGreeterDB.ignoreListEnabled
+        end,
+        function(value)
+            PartyGreeterDB.ignoreListEnabled = value and true or false
+        end
+    )
+
+    local _, promptBeforeGreetingInitializer = createBooleanSetting(
+        category,
+        addon.Settings.Keys.PromptBeforeGreeting,
+        TEXT.promptBeforeGreetingLabel,
+        addon.DEFAULTS.promptBeforeGreeting,
+        function()
+            return PartyGreeterDB.promptBeforeGreeting
+        end,
+        function(value)
+            PartyGreeterDB.promptBeforeGreeting = value and true or false
+        end
+    )
+
+    local _, ignoredPlayersInitializer = createIgnoredPlayersMultiSelectSetting(
+        category,
+        addon.Settings.Keys.IgnoredPlayers,
+        TEXT.ignoredPlayersLabel
+    )
+
+    promptBeforeGreetingInitializer:SetParentInitializer(ignoreListEnabledInitializer, function()
+        return PartyGreeterDB.ignoreListEnabled
+    end)
+    ignoredPlayersInitializer:SetParentInitializer(ignoreListEnabledInitializer, function()
+        return PartyGreeterDB.ignoreListEnabled
+    end)
+
+    tryAddSectionHeader(layout, TEXT.antiRepeatHeader)
+
+    local _, antiRepeatEnabledInitializer = createBooleanSetting(
+        category,
+        addon.Settings.Keys.AntiRepeatEnabled,
+        TEXT.antiRepeatEnabledLabel,
+        addon.DEFAULTS.antiRepeatEnabled,
+        function()
+            return PartyGreeterDB.antiRepeatEnabled
+        end,
+        function(value)
+            PartyGreeterDB.antiRepeatEnabled = value and true or false
+        end
+    )
+
+    local _, antiRepeatCooldownInitializer = createSliderSetting(
+        category,
+        addon.Settings.Keys.AntiRepeatCooldownMinutes,
+        TEXT.antiRepeatCooldownLabel,
+        addon.DEFAULTS.antiRepeatCooldownMinutes,
+        function()
+            return normalizeAntiRepeatCooldown(PartyGreeterDB.antiRepeatCooldownMinutes)
+        end,
+        function(value)
+            PartyGreeterDB.antiRepeatCooldownMinutes = normalizeAntiRepeatCooldown(value)
+        end,
+        LIMITS.antiRepeatCooldownMin,
+        LIMITS.antiRepeatCooldownMax,
+        1
+    )
+
+    local _, antiRepeatOncePerSessionInitializer = createBooleanSetting(
+        category,
+        addon.Settings.Keys.AntiRepeatOncePerSession,
+        TEXT.antiRepeatOncePerSessionLabel,
+        addon.DEFAULTS.antiRepeatOncePerSession,
+        function()
+            return PartyGreeterDB.antiRepeatOncePerSession
+        end,
+        function(value)
+            PartyGreeterDB.antiRepeatOncePerSession = value and true or false
+        end
+    )
+
+    antiRepeatCooldownInitializer:SetParentInitializer(antiRepeatEnabledInitializer, function()
+        return PartyGreeterDB.antiRepeatEnabled and not PartyGreeterDB.antiRepeatOncePerSession
+    end)
+    antiRepeatOncePerSessionInitializer:SetParentInitializer(antiRepeatEnabledInitializer, function()
+        return PartyGreeterDB.antiRepeatEnabled
+    end)
+
+    tryAddSectionHeader(layout, TEXT.quietModeHeader)
+
+    local _, quietModeEnabledInitializer = createBooleanSetting(
+        category,
+        addon.Settings.Keys.QuietModeEnabled,
+        TEXT.quietModeEnabledLabel,
+        addon.DEFAULTS.quietModeEnabled,
+        function()
+            return PartyGreeterDB.quietModeEnabled
+        end,
+        function(value)
+            PartyGreeterDB.quietModeEnabled = value and true or false
+        end
+    )
+
+    local _, quietModeSuppressInCombatInitializer = createBooleanSetting(
+        category,
+        addon.Settings.Keys.QuietModeSuppressInCombat,
+        TEXT.quietModeSuppressInCombatLabel,
+        addon.DEFAULTS.quietModeSuppressInCombat,
+        function()
+            return PartyGreeterDB.quietModeSuppressInCombat
+        end,
+        function(value)
+            PartyGreeterDB.quietModeSuppressInCombat = value and true or false
+        end
+    )
+
+    local _, quietModeSuppressDuringBossPullsInitializer = createBooleanSetting(
+        category,
+        addon.Settings.Keys.QuietModeSuppressDuringBossPulls,
+        TEXT.quietModeSuppressDuringBossPullsLabel,
+        addon.DEFAULTS.quietModeSuppressDuringBossPulls,
+        function()
+            return PartyGreeterDB.quietModeSuppressDuringBossPulls
+        end,
+        function(value)
+            PartyGreeterDB.quietModeSuppressDuringBossPulls = value and true or false
+        end
+    )
+
+    local _, quietModeSuppressAfterKeyStartInitializer = createBooleanSetting(
+        category,
+        addon.Settings.Keys.QuietModeSuppressAfterKeyStart,
+        TEXT.quietModeSuppressAfterKeyStartLabel,
+        addon.DEFAULTS.quietModeSuppressAfterKeyStart,
+        function()
+            return PartyGreeterDB.quietModeSuppressAfterKeyStart
+        end,
+        function(value)
+            PartyGreeterDB.quietModeSuppressAfterKeyStart = value and true or false
+        end
+    )
+
+    local _, quietModeSuppressInMatchmadeGroupsInitializer = createBooleanSetting(
+        category,
+        addon.Settings.Keys.QuietModeSuppressInMatchmadeGroups,
+        TEXT.quietModeSuppressInMatchmadeGroupsLabel,
+        addon.DEFAULTS.quietModeSuppressInMatchmadeGroups,
+        function()
+            return PartyGreeterDB.quietModeSuppressInMatchmadeGroups
+        end,
+        function(value)
+            PartyGreeterDB.quietModeSuppressInMatchmadeGroups = value and true or false
+        end
+    )
+
+    quietModeSuppressInCombatInitializer:SetParentInitializer(quietModeEnabledInitializer, function()
+        return PartyGreeterDB.quietModeEnabled
+    end)
+    quietModeSuppressDuringBossPullsInitializer:SetParentInitializer(quietModeEnabledInitializer, function()
+        return PartyGreeterDB.quietModeEnabled
+    end)
+    quietModeSuppressAfterKeyStartInitializer:SetParentInitializer(quietModeEnabledInitializer, function()
+        return PartyGreeterDB.quietModeEnabled
+    end)
+    quietModeSuppressInMatchmadeGroupsInitializer:SetParentInitializer(quietModeEnabledInitializer, function()
+        return PartyGreeterDB.quietModeEnabled
+    end)
 
     tryAddSectionHeader(layout, TEXT.timingHeader)
 
@@ -571,6 +790,7 @@ function addon.RegisterSettingsPanel()
     )
 
     Settings.RegisterAddOnCategory(category)
+    addon.optionsCategory = category
 end
 
 function addon.OpenSettingsPanel()
@@ -627,8 +847,6 @@ function PartyGreeter_OnCompartmentLeave(addonName, menuButtonFrame)
         GameTooltip:Hide()
     end
 end
-
-addon.RegisterSettingsPanel()
 
 SLASH_PARTYGREETER1 = "/partygreeter"
 SLASH_PARTYGREETER2 = "/pg"
