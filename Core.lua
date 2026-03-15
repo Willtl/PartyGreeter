@@ -394,7 +394,7 @@ local function shouldSuppressGreeting()
     return false
 end
 
-local function isManualPromptEnabled()
+local function isIgnoredPlayerPromptEnabled()
     return PartyGreeterDB.ignoreListEnabled and PartyGreeterDB.promptBeforeGreeting
 end
 
@@ -458,7 +458,7 @@ shouldAutoGreetMember = function(guid, fullName)
     return guid and fullName and isMemberEligibleForGreeting(guid) and not isIgnoredMember(fullName)
 end
 
-local function shouldPromptForIgnoredMember(guid, fullName)
+local function shouldPromptForIgnoredPlayer(guid, fullName)
     return guid and fullName and isMemberEligibleForGreeting(guid) and isIgnoredMember(fullName)
 end
 
@@ -466,7 +466,7 @@ local function pruneManualPromptQueue(currentMembers)
     local remainingQueue = {}
     for _, member in ipairs(manualPromptQueue) do
         local latestName = currentMembers[member.guid]
-        if shouldPromptForIgnoredMember(member.guid, latestName) then
+        if shouldPromptForIgnoredPlayer(member.guid, latestName) then
             remainingQueue[#remainingQueue + 1] = {
                 guid = member.guid,
                 fullName = latestName,
@@ -477,7 +477,7 @@ local function pruneManualPromptQueue(currentMembers)
 
     if activePromptMember then
         local latestName = currentMembers[activePromptMember.guid]
-        if shouldPromptForIgnoredMember(activePromptMember.guid, latestName) then
+        if shouldPromptForIgnoredPlayer(activePromptMember.guid, latestName) then
             activePromptMember.fullName = latestName
         else
             activePromptMember = nil
@@ -503,7 +503,7 @@ local function isPromptQueued(guid)
 end
 
 local function enqueueManualPrompt(guid, fullName)
-    if not shouldPromptForIgnoredMember(guid, fullName) or isPromptQueued(guid) then
+    if not shouldPromptForIgnoredPlayer(guid, fullName) or isPromptQueued(guid) then
         return
     end
 
@@ -523,9 +523,9 @@ local function ensureManualGreetingPopup()
     end
 
     StaticPopupDialogs[MANUAL_GREETING_POPUP_KEY] = {
-        text = "%s is ignored by Party Greeter.\nDo you want to greet them anyway?",
-        button1 = "Greet",
-        button2 = "Keep Ignored",
+        text = "%s is on your ignore list.\nGreet them anyway?",
+        button1 = "Greet Anyway",
+        button2 = "Skip Greeting",
         OnAccept = function(_, data)
             if not data or not data.member then
                 return
@@ -574,7 +574,7 @@ local function ensureManualGreetingPopup()
 end
 
 showNextManualPrompt = function()
-    if activePromptMember or not isManualPromptEnabled() then
+    if activePromptMember or not isIgnoredPlayerPromptEnabled() then
         return
     end
 
@@ -590,7 +590,7 @@ showNextManualPrompt = function()
     while #manualPromptQueue > 0 do
         local member = table.remove(manualPromptQueue, 1)
         local latestName = getCurrentMemberNameByGUID(member.guid)
-        if shouldPromptForIgnoredMember(member.guid, latestName) then
+        if shouldPromptForIgnoredPlayer(member.guid, latestName) then
             member.fullName = latestName
             activePromptMember = member
             StaticPopup_Show(MANUAL_GREETING_POPUP_KEY, member.fullName, nil, {
@@ -646,7 +646,7 @@ local function greetNewPartyMembers()
     else
         prunePendingMembers(currentMembers)
 
-        if isManualPromptEnabled() then
+        if isIgnoredPlayerPromptEnabled() then
             pruneManualPromptQueue(currentMembers)
         else
             clearManualPromptQueue()
@@ -655,7 +655,7 @@ local function greetNewPartyMembers()
         local hasAutoGreetMembers = false
         for guid, fullName in pairs(currentMembers) do
             if not greetedMembers[guid] then
-                if isManualPromptEnabled() and shouldPromptForIgnoredMember(guid, fullName) then
+                if isIgnoredPlayerPromptEnabled() and shouldPromptForIgnoredPlayer(guid, fullName) then
                     enqueueManualPrompt(guid, fullName)
                 elseif shouldAutoGreetMember(guid, fullName) then
                     addPendingMember(guid, fullName)
@@ -666,7 +666,7 @@ local function greetNewPartyMembers()
 
         refreshGreetedMembers(currentMembers)
 
-        if isManualPromptEnabled() then
+        if isIgnoredPlayerPromptEnabled() then
             showNextManualPrompt()
         end
 

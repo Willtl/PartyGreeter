@@ -1,7 +1,7 @@
 ## Interface: 120001
 ## Title: Party Greeter
 ## Notes: A simple addon to greet new party members.
-## Version: 1.1.0
+## Version: 1.2.0
 ## Author: Willian T. Lunardi
 ## AddonCompartmentFunc: PartyGreeter_OnCompartmentClick
 ## AddonCompartmentFuncOnEnter: PartyGreeter_OnCompartmentEnter
